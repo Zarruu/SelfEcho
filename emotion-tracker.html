@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emotion Tracker - SelfEcho</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background-color: #5A3392;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+    #chat {
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .message {
+      margin: 0.5rem 0;
+      padding: 1rem;
+      border-radius: 10px;
+      max-width: 70%;
+    }
+    .bot {
+      background-color: #e0e7ff;
+      align-self: flex-start;
+    }
+    .user {
+      background-color: #5A3392;
+      color: white;
+      align-self: flex-end;
+    }
+    #controls {
+      display: flex;
+      padding: 1rem;
+      background: #fff;
+      border-top: 1px solid #ccc;
+    }
+    #input {
+      flex: 1;
+      padding: 0.5rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background: #5A3392;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      margin-left: 0.5rem;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    video {
+      width: 150px;
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+  @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+
+<header>Emotion Tracker</header>
+<div id="moodStatus" style="text-align: center; margin-top: 0.5rem; font-weight: bold;">Mood Status: -</div>
+<video id="video" autoplay muted playsinline></video>
+<div id="chat"></div>
+<div id="controls">
+  <input type="text" id="input" placeholder="Ketik jawabanmu...">
+  <button onclick="sendMessage()">Kirim</button>
+  <button onclick="endSession()">Akhiri Sesi</button>
+</div>
+
+<script>
+  const emotionQuestions = {
+    happy: ["Apa yang membuatmu tersenyum hari ini?", "Siapa yang ingin kamu rayakan bersama?"],
+    sad: ["Apa yang membuatmu merasa lebih baik?", "Siapa yang bisa kamu hubungi saat sedih?"],
+    angry: ["Apa yang biasanya membuatmu tenang?", "Bagaimana kamu mengelola kemarahanmu?"],
+    surprised: ["Kapan terakhir kamu terkejut?", "Apa hal mengejutkan yang pernah terjadi padamu?"],
+    disgusted: ["Bagaimana kamu menghindari situasi tidak nyaman?"],
+    fearful: ["Apa ketakutan terbesarmu yang ingin kamu hadapi?"],
+    neutral: ["Apa pikiranmu saat ini?", "Apa hal kecil yang kamu syukuri?"]
+  };
+
+  let chatLog = [];
+  let previousEmotion = "neutral";
+  let currentEmotion = "neutral";
+  let lastChangeTime = Date.now();
+
+  async function startVideo() {
+    await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+    await faceapi.nets.faceExpressionNet.loadFromUri('./models');
+
+    const moodStatus = document.getElementById('moodStatus');
+    const video = document.getElementById('video');
+    navigator.mediaDevices.getUserMedia({ video: {} })
+      .then(stream => video.srcObject = stream)
+      .catch(err => console.error(err));
+
+    video.addEventListener('play', () => {
+      setInterval(detectEmotion, 3000);
+    });
+  }
+
+  async function detectEmotion() {
+    const video = document.getElementById('video');
+    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+
+    if (detections.length > 0) {
+      const exp = detections[0].expressions;
+      const topEmotion = Object.entries(exp).sort((a,b) => b[1] - a[1])[0][0];
+      currentEmotion = mapFaceAPIEmotion(topEmotion);
+      moodStatus.innerText = `Mood Status: ${currentEmotion}`;
+
+      if (currentEmotion !== previousEmotion) {
+        askQuestion(currentEmotion);
+        previousEmotion = currentEmotion;
+        lastChangeTime = Date.now();
+      } else if (Date.now() - lastChangeTime > 30000) { // konsisten 30 detik
+        askQuestion(currentEmotion);
+        lastChangeTime = Date.now();
+      }
+    }
+  }
+
+  function mapFaceAPIEmotion(raw) {
+    const mapping = {
+      happy: 'happy',
+      sad: 'sad',
+      angry: 'angry',
+      surprised: 'surprised',
+      disgusted: 'disgusted',
+      fearful: 'fearful',
+      neutral: 'neutral'
+    };
+    return mapping[raw] || 'neutral';
+  }
+
+  function askQuestion(emotion) {
+    const questions = emotionQuestions[emotion];
+    if (questions && questions.length > 0) {
+      const question = questions[Math.floor(Math.random() * questions.length)];
+      addMessage('bot', question);
+    }
+  }
+
+  function addMessage(sender, text) {
+    const chat = document.getElementById('chat');
+    const div = document.createElement('div');
+    div.className = `message ${sender}`;
+    div.style.animation = "fadeIn 0.5s ease";
+    div.innerText = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    chatLog.push({ sender, text, timestamp: new Date().toLocaleTimeString() });
+  }
+
+  function sendMessage() {
+    const input = document.getElementById('input');
+    const text = input.value.trim();
+    if (text) {
+      addMessage('user', text);
+      input.value = '';
+    }
+  }
+
+  function endSession() {
+    if (chatLog.length > 0) {
+      const savedChats = JSON.parse(localStorage.getItem('emotion_tracker_logs') || '[]');
+      savedChats.push({ session: chatLog, date: new Date().toLocaleString() });
+      localStorage.setItem('emotion_tracker_logs', JSON.stringify(savedChats));
+      alert('Sesi telah disimpan!');
+      window.location.href = 'index.html'
+    } else {
+      alert('Belum ada interaksi!');
+    }
+  }
+
+  window.onload = startVideo;
+</script>
+
+</body>
+</html>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Questionnaire</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      max-width: 800px;
+      width: 100%;
+      background: #fff;
+      padding: 2rem;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+    }
+    button {
+      background: #4f46e5;
+      color: white;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 1rem;
+      margin-right: 1rem;
+    }
+    textarea {
+      width: 100%;
+      height: 80px;
+      padding: 1rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      margin-top: 0.5rem;
+    }
+    .prompt-block {
+      margin-bottom: 1.5rem;
+    }
+    .log-btn {
+      background: #e0e7ff;
+      color: #000;
+      width: 100%;
+      padding: 0.75rem;
+      margin: 0.5rem 0;
+      border: 1px solid #c7d2fe;
+      border-radius: 8px;
+      text-align: left;
+      cursor: pointer;
+    }
+    #logDetailView {
+      display: none;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-top: 2rem;
+      width: 100%;
+    }
+    .log-entry {
+      margin-bottom: 1rem;
+    }
+    #emotionResult {
+      font-weight: bold;
+      margin-top: 1rem;
+    }
+    video {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 200px;
+      max-width: 200px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      z-index: 999;
+    }
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h2>🎭  Questionnaire - Refleksi Emosional</h2>
+    <form id="reflectionForm"></form>
+    <div>
+      <button onclick="submitReflection()">📝 Submit Refleksi</button>
+      <button onclick="renderLogList()">📚 Log History</button>
+    </div>
+
+    <div style="text-align: center">
+      <video id="video" autoplay muted playsinline></video>
+      <div id="emotionResult">Deteksi emosi: -</div>
+    </div>
+
+    <div id="logList"></div>
+    <div id="logDetailView"></div>
+  </div>
+
+  <script>
+    const questionBank = [
+  "Apa hal paling sederhana yang membuatmu bahagia?",
+  "Kapan terakhir kali kamu merasa tenang?",
+  "Apa yang paling kamu syukuri minggu ini?",
+  "Siapa yang membuat harimu lebih baik baru-baru ini?",
+  "Apa hal baik kecil yang terjadi hari ini?",
+  "Apa pelajaran penting yang kamu pelajari dari kegagalan?",
+  "Apa kenangan masa kecil yang membuatmu tersenyum?",
+  "Apa perasaanmu saat bangun pagi hari ini?",
+  "Apa hal yang kamu lakukan untuk menjaga kesehatan mentalmu?",
+  "Apa harapanmu untuk dirimu sendiri minggu depan?",
+  "Bagaimana kamu menenangkan diri saat stres?",
+  "Apa yang kamu lakukan saat kamu merasa sedih?",
+  "Siapa orang yang ingin kamu hubungi sekarang?",
+  "Apa arti kesuksesan bagi kamu?",
+  "Kapan terakhir kamu merasa bangga pada dirimu sendiri?",
+  "Apa kekuatan terbesar yang kamu miliki?",
+  "Apa yang membuatmu merasa dicintai?",
+  "Apa yang biasanya membuatmu tertawa?",
+  "Bagaimana cara kamu mengekspresikan rasa syukur?",
+  "Apa hal kecil yang membuat harimu menyenangkan?",
+  // ... tambahkan hingga 100 pertanyaan
+  "Apa yang ingin kamu katakan pada dirimu sendiri di masa lalu?",
+  "Apa makna 'rumah' bagimu?",
+  "Apa perasaan yang paling sering kamu rasakan belakangan ini?",
+  "Apa lagu yang paling menggambarkan suasana hatimu?",
+  "Jika kamu bisa mengulang satu momen bahagia, apa itu?",
+  "Apa kebiasaan kecil yang kamu banggakan?",
+  "Apa ketakutan yang ingin kamu atasi?",
+  "Apa momen paling damai yang pernah kamu alami?"
+];
+
+    let detectedEmotion = "-";
+let sessionQuestions = []; // pertanyaan aktif untuk sesi ini
+
+    window.onload = async () => {
+  sessionQuestions = questionBank.sort(() => 0.5 - Math.random()).slice(0, 10);
+  const form = document.getElementById("reflectionForm");
+  form.innerHTML = '<p>📝 Ini sesi refleksimu hari ini. Kamu mendapatkan 10 pertanyaan acak.</p>';
+  sessionQuestions.forEach((prompt, index) => {
+        const block = document.createElement("div");
+        block.className = "prompt-block";
+        block.innerHTML = `
+          <label><strong>${index + 1}. ${prompt}</strong></label>
+          <textarea id="answer${index}" placeholder="Tulis jawabanmu di sini..."></textarea>
+        `;
+        form.appendChild(block);
+      });
+
+      await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+      await faceapi.nets.faceExpressionNet.loadFromUri('./models');
+      startVideo();
+    }
+
+    function startVideo() {
+      const video = document.getElementById('video');
+      const emotionResult = document.getElementById('emotionResult');
+
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => video.srcObject = stream)
+        .catch(err => console.error("Kamera tidak dapat diakses", err));
+
+      video.addEventListener('play', () => {
+        setInterval(async () => {
+          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+          if (detections.length > 0) {
+            const exp = detections[0].expressions;
+            const topEmotion = Object.entries(exp).sort((a, b) => b[1] - a[1])[0][0];
+            detectedEmotion = topEmotion;
+            emotionResult.textContent = `Deteksi emosi: ${topEmotion}`;
+          } else {
+            detectedEmotion = "-";
+            emotionResult.textContent = "Deteksi emosi: Tidak Terdeteksi";
+          }
+        }, 2000);
+      });
+    }
+
+    function submitReflection() {
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString('id-ID');
+      const answers = sessionQuestions.map((prompt, i) => {
+        const answer = document.getElementById(`answer${i}`).value;
+        return { question: prompt, answer };
+      });
+
+      const log = {
+        timestamp,
+        answers,
+        averageEmotion: detectedEmotion
+      };
+
+      const logs = JSON.parse(localStorage.getItem('emoprompt_logs') || '[]');
+      logs.push(log);
+      localStorage.setItem('emoprompt_logs', JSON.stringify(logs));
+
+      alert('Refleksi berhasil disimpan!');
+    }
+    
+
+    function renderLogList() {
+      const logs = JSON.parse(localStorage.getItem('emoprompt_logs') || '[]');
+      const listContainer = document.getElementById('logList');
+      listContainer.innerHTML = '<h3>📚 Log History</h3>';
+
+      logs.forEach((log, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'log-btn';
+        btn.textContent = log.timestamp;
+        btn.onclick = () => showLogDetail(index);
+        listContainer.appendChild(btn);
+      });
+    }
+
+    function showLogDetail(index) {
+      const logs = JSON.parse(localStorage.getItem('emoprompt_logs') || '[]');
+      const log = logs[index];
+      const detailContainer = document.getElementById('logDetailView');
+
+      let html = `<h3>${log.timestamp}</h3><hr>`;
+      log.answers.forEach((a, i) => {
+        html += `<div class="log-entry"><strong>Pertanyaan ${i + 1}</strong><br>${a.answer}</div>`;
+      });
+      html += `<div><strong>Rata-rata emosi hari ini:</strong> ${log.averageEmotion}</div>`;
+
+      detailContainer.innerHTML = html;
+      detailContainer.style.display = 'block';
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+  </script>
+</body>
+</html>
