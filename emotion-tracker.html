@@ -122,6 +122,9 @@
     });
   }
 
+  let lastQuestionTime = 0; // Tambahan: waktu pertanyaan terakhir
+const MIN_QUESTION_INTERVAL = 20000; // 20 detik
+
   async function detectEmotion() {
     const video = document.getElementById('video');
     const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
@@ -132,16 +135,20 @@
       currentEmotion = mapFaceAPIEmotion(topEmotion);
       moodStatus.innerText = `Mood Status: ${currentEmotion}`;
 
-      if (currentEmotion !== previousEmotion) {
+      const now = Date.now();
+      if (currentEmotion !== previousEmotion && now - lastQuestionTime > MIN_QUESTION_INTERVAL) {
         askQuestion(currentEmotion);
         previousEmotion = currentEmotion;
-        lastChangeTime = Date.now();
-      } else if (Date.now() - lastChangeTime > 30000) { // konsisten 30 detik
+        lastChangeTime = now;
+        lastQuestionTime = now;
+      } else if (now - lastChangeTime > 30000 && now - lastQuestionTime > MIN_QUESTION_INTERVAL) { 
         askQuestion(currentEmotion);
-        lastChangeTime = Date.now();
+        lastChangeTime = now;
+        lastQuestionTime = now;
       }
     }
   }
+
 
   function mapFaceAPIEmotion(raw) {
     const mapping = {
